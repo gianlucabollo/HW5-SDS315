@@ -1,0 +1,119 @@
+---
+title: "SDS HW 5"
+author: "Gianluca Bollo (gb25625) - https://github.com/gianlucabollo/HW5-SDS315"
+date: "2/29/2024"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 5)
+```
+
+```{r import packages}
+library(tidyverse)
+library(mosaic)
+```
+
+# \centering Iron Bank Suspicious Trading Activity Investigation
+
+```{r Q1}
+sim_trades = do(100000)*nflip(n = 2021, prob=0.024)
+ggplot(sim_trades) + geom_histogram(aes(x = nflip, fill = nflip >= 70), binwidth = 1) + labs(x = 'Number of Flagged Trades', y = 'Count', fill = 'Over or equal to 70 flagged trades', title = '100,000 simulations of flagged Iron Bank Trades based on 2,021 trades')
+trade_p_value = sum(sim_trades >= 70)/100000
+```
+
+-   The null hypothesis for this test is that the cluster of flagged Iron Bank trades was truly random and the data can be explained by the baseline probability of any legal trade being flagged (2.4%).
+
+-   The test statistic I used is the number of flagged Iron Bank Trades out of the total 2,021, which is 70. This test statistic is used to measure evidence in the data against the null hypothesis.
+
+-   The p-value of this test statistic is `r trade_p_value`.
+
+-   Due to the p-value of `r trade_p_value` being very small and "statistically significant", the null hypothesis that the 70 flagged trades is consistent with the variability of the baseline trade-flag probability does not seem that very plausible, and there is likely something in need of explanation.
+
+# \centering Gourmet Bites Health Code Vilation Investigation
+
+```{r Q2}
+sim_bites = do(100000)*nflip(n = 50, prob = .03)
+ggplot(sim_bites) + geom_histogram(aes(x = nflip, fill = nflip >= 8), binwidth = 1) + labs(x = 'Number of Health Code Violations', y = 'Count', fill = 'Over or equal to 8 violations', title = '100,000 simulations of Gourmet Bites Health code violations based on a sample size of 50')
+bites_p_value = sum(sim_bites >= 8)/100000
+```
+
+-   The null hypothesis for this test is that the cluster of Gourmet Bite locations with violations can be explained by random issues, consistent with the Health Department's baseline probability of any given restaurant inspection resulting in a health code violation (3.0%).
+
+-   The test statistic I used is the number of Gourmet Bites health code violations out of the total 50 locations, which is 8. This test statistic is used to measure evidence in the data against the null hypothesis.
+
+-   The p-value of this test statistic is `r bites_p_value`.
+
+-   Due to the p-value of `r bites_p_value` being very small and "statistically significant", the null hypothesis that the 8 health code violations is consistent with the Health Departments 3% baseline probability of a violation does not seem plausible. Therefore, the Health Department should decide to take action and further pursue this issue.
+
+\newpage
+
+# \centering LLM Watermark Identification
+
+```{r Q3}
+letter_freq = read.csv('letter_frequencies.csv')
+brown_sent = readLines('brown_sentences.txt')
+
+brown_sent[2]
+
+## Function imported from lecture notes 'caesar_cipher.R'
+calculate_chi_squared = function(sentence, freq_table) {
+  
+  # Ensure letter frequencies are normalized and sum to 1
+  freq_table$Probability = freq_table$Probability / sum(freq_table$Probability)
+  
+  # Remove non-letters and convert to uppercase
+  clean_sentence = gsub("[^A-Za-z]", "", sentence)
+  clean_sentence = toupper(clean_sentence)
+  
+  # Count the occurrences of each letter in the sentence
+  observed_counts = table(factor(strsplit(clean_sentence, "")[[1]], levels = freq_table$Letter))
+  
+  # Calculate expected counts
+  total_letters = sum(observed_counts)
+  expected_counts = total_letters * freq_table$Probability
+  
+  # Chi-squared statistic
+  chi_squared_stat = sum((observed_counts - expected_counts)^2 / expected_counts)
+  
+  return(chi_squared_stat)
+}
+
+standard_chi2 = numeric()
+
+for (elem in brown_sent) {
+  chi2 = calculate_chi_squared(elem, letter_freq)
+  standard_chi2 = c(standard_chi2, chi2)
+}
+reg_chi_dist = tibble(chistat = standard_chi2)
+
+ggplot(reg_chi_dist) + geom_histogram(aes(x = chistat)) + labs(title = 'Null distribution of chi-squared statistics from normal english sentences', x = 'Chi Sq Value', y = 'Count')
+
+sentences <- c(
+  "She opened the book and started to read the first chapter, eagerly anticipating what might come next.",
+  "Despite the heavy rain, they decided to go for a long walk in the park, crossing the main avenue by the fountain in the center.",
+  "The museum’s new exhibit features ancient artifacts from various civilizations around the world.",
+  "He carefully examined the document, looking for any clues that might help solve the mystery.",
+  "The students gathered in the auditorium to listen to the guest speaker’s inspiring lecture.",
+  "Feeling vexed after an arduous and zany day at work, she hoped for a peaceful and quiet evening at home, cozying up after a quick dinner with some TV, or maybe a book on her upcoming visit to Auckland.",
+  "The chef demonstrated how to prepare a delicious meal using only locally sourced ingredients, focusing mainly on some excellent dinner recipes from Spain.",
+  "They watched the sunset from the hilltop, marveling at the beautiful array of colors in the sky.",
+  "The committee reviewed the proposal and provided many points of useful feedback to improve the project’s effectiveness.",
+  "Despite the challenges faced during the project, the team worked tirelessly to ensure its successful completion, resulting in a product that exceeded everyone’s expectations."
+)
+
+# Loop over the sentences
+ex_sent_p = numeric()
+for (sentence in sentences) {
+  sent_chi = calculate_chi_squared(sentence, letter_freq)
+  ex_sent_p = c(ex_sent_p, sum(reg_chi_dist >= sent_chi)/nrow(reg_chi_dist))
+}
+p_values_sent = tibble(p_value = ex_sent_p)
+p_values_sent = round(p_values_sent, 3)
+plot(p_values_sent$p_value, log = 'y')
+p_values_sent
+```
+
+The watermarked sentence made by a LLM is "Feeling vexed after an arduous and zany day at work, she hoped for a peaceful and quiet evening at home, cozying up after a quick dinner with some TV, or maybe a book on her upcoming visit to Auckland." I know this because when using the null distribution and the sentences' chi squared statistic as a test statistic, its p-value is `r min(p_values_sent$p_value)`, which is relatively smaller than the p-values of the other sentences. Is also satisfies being below the 0.05 threshold, therefore deeming it "significant". This can be visibly seen above in the scatter plot, with a logged y-axis.
